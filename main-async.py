@@ -542,6 +542,21 @@ def run_client_process(account_id):
 
 def main():
     """Main entry point - start multiple processes"""
+    # Load environment variables
+    print("#" * 38)
+    print("Loading environment variables...")
+    print("APP_CLIENT_ID :",os.getenv("APP_CLIENT_ID"))
+    print("APP_CLIENT_SECRET :",os.getenv("APP_CLIENT_SECRET"))
+    print("ACCESS_TOKEN :",os.getenv("ACCESS_TOKEN"))
+    print("ACCOUNT_TYPE :",os.getenv("ACCOUNT_TYPE"))
+    print("TELEGRAM_BOT_TOKEN :",os.getenv("TELEGRAM_BOT_TOKEN"))
+    print("TELEGRAM_CHAT_ID :",os.getenv("TELEGRAM_CHAT_ID"))
+    print("SCHEDULE_PNL_REPORT_INTERVAL :",os.getenv("SCHEDULE_PNL_REPORT_INTERVAL"))
+    print("SCHEDULE_PNL_REPORT_TIME :",os.getenv("SCHEDULE_PNL_REPORT_TIME"))
+    print("SCHEDULE_DEALS_REPORT_INTERVAL :",os.getenv("SCHEDULE_DEALS_REPORT_INTERVAL"))
+    print("SCHEDULE_DEALS_REPORT_TIME :",os.getenv("SCHEDULE_DEALS_REPORT_TIME"))
+    print("ACCOUNT_ID_LIST :",os.getenv("ACCOUNT_ID_LIST"))
+    print("#" * 38)
 
     account_ids = json.loads(os.getenv("ACCOUNT_ID_LIST"))
     processes = []
