@@ -156,12 +156,7 @@ class CTraderAsyncClient:
             if self.position_pnl_data:
                 self.send_pnl_telegram_report()
             else:
-                telegram_msg = f"📊 <b>Active Position P&L Report - Account No {self.current_account_id}</b>\n"
-                telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                telegram_msg += f"<pre>"
-                telegram_msg += f"🎯 No Active Position"
-                telegram_msg += f"</pre>"
-                self.send_telegram_message(telegram_msg)
+                self.send_empty_pnl_telegram_report()
 
         elif message.payloadType == ProtoOADealListRes().payloadType:
             deal_response = Protobuf.extract(message)
@@ -172,17 +167,11 @@ class CTraderAsyncClient:
             yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
             start_of_day = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
 
-            print("self.deal_list_data...", self.deal_list_data)
+            # print("self.deal_list_data...", self.deal_list_data)
             if self.deal_list_data:
                 self.send_deal_telegram_report(start_of_day)
             else:
-                telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
-                telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
-                telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                telegram_msg += f"<pre>"
-                telegram_msg += f"✅ No closed deals found for this period."
-                telegram_msg += f"</pre>"
-                self.send_telegram_message(telegram_msg)
+                self.send_empty_deal_telegram_report(start_of_day)
 
         elif message.payloadType == ProtoOAExecutionEvent().payloadType:
             execution_event = Protobuf.extract(message)
@@ -408,6 +397,10 @@ class CTraderAsyncClient:
 
         closed_deals = [deal for deal in closed_deals_1 if deal.closePositionDetail.balance > 0]
 
+        if len(closed_deals) == 0:
+            self.send_empty_deal_telegram_report(start_date)
+            return
+
         # Create table header with Deal ID column
         telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_date.strftime('%Y-%m-%d')}\n"
@@ -498,6 +491,25 @@ class CTraderAsyncClient:
         }
         # other symbols default to 5 digits
         return volume / (10 ** (money_digits +  digits.get(symbol_id, 5)))
+
+    def send_empty_deal_telegram_report(self, start_of_day):
+        """Send empty deal report when no closed deals are found"""
+        telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        telegram_msg += f"<pre>"
+        telegram_msg += f"✅ No closed deals found for this period."
+        telegram_msg += f"</pre>"
+        self.send_telegram_message(telegram_msg)
+
+    def send_empty_pnl_telegram_report(self):
+        """Send empty PnL report when no active positions are found"""
+        telegram_msg = f"📊 <b>Active Position P&L Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        telegram_msg += f"<pre>"
+        telegram_msg += f"🎯 No Active Position"
+        telegram_msg += f"</pre>"
+        self.send_telegram_message(telegram_msg)
 
 def run_client_process(account_id):
     """Run a single client in its own process"""
