@@ -533,6 +533,9 @@ class CTraderAsyncClient:
         Giờ gd: Thứ 2 04:01:00 - Thứ 6 03:59:45
         """
         now = datetime.datetime.now()
+        tz = datetime.timezone(datetime.timedelta(hours=7))  # UTC+7
+        now = now.astimezone(tz)
+
         current_weekday = now.weekday()  # 0=Monday, 6=Sunday
         current_time = now.time()
 
