@@ -89,6 +89,10 @@ class CTraderAsyncClient:
         schedule_deals_report_time = os.getenv("SCHEDULE_DEALS_REPORT_TIME")
         schedule.every(schedule_deals_report_interval).days.at(schedule_deals_report_time).do(self.schedule_daily_deal_report)
 
+        # Default 04:00 in Saturday UTC +7 # 21:00 in Friday UTC 0
+        schedule_weekly_report_time = os.getenv("SCHEDULE_WEEKLY_REPORT_TIME", "21:00")
+        schedule.every().friday.at(schedule_weekly_report_time).do(self.schedule_weekly_deal_report)
+
         # Start scheduler
         self.scheduler_task = task.LoopingCall(self.run_scheduler)
         self.scheduler_task.start(60)  # Run every 60 seconds
@@ -163,15 +167,22 @@ class CTraderAsyncClient:
             self.deal_list_data = deal_response.deal
             print(f"[{self.process_name}] Deal list data received - Account {self.current_account_id}: {len(self.deal_list_data)} deals")
 
-            # print("self.deal_list_data...", self.deal_list_data)
-            yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
-            start_of_day = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-
-            # print("self.deal_list_data...", self.deal_list_data)
-            if self.deal_list_data:
-                self.send_deal_telegram_report(start_of_day)
+            # Check if this is weekly report
+            if hasattr(self, 'is_weekly_report') and self.is_weekly_report:
+                self.is_weekly_report = False  # Reset flag
+                if self.deal_list_data:
+                    self.send_weekly_deal_telegram_report()
+                else:
+                    self.send_empty_weekly_deal_telegram_report()
             else:
-                self.send_empty_deal_telegram_report(start_of_day)
+                # Original daily report logic
+                yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+                start_of_day = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                if self.deal_list_data:
+                    self.send_deal_telegram_report(start_of_day)
+                else:
+                    self.send_empty_deal_telegram_report(start_of_day)
 
         elif message.payloadType == ProtoOAExecutionEvent().payloadType:
             execution_event = Protobuf.extract(message)
@@ -266,21 +277,27 @@ class CTraderAsyncClient:
         """Schedule PnL report"""
         print(f"[{self.process_name}] Schedule PnL report - Account {self.current_account_id}...")
         if self.connection_completed and self.current_account_id:
-            reactor.callLater(0, self.send_hourly_pnl_report)
-
-    def send_hourly_pnl_report(self):
-        """Send hourly PnL report"""
-        print(f"[{self.process_name}] Sending hourly PnL report - Account {self.current_account_id}...")
-        # Request current PnL data
-        self.send_proto_oa_get_position_unrealized_pnl_req()
+            reactor.callLater(0, self.send_hourly_pnl_list_req)
 
     def schedule_daily_deal_report(self):
         """Schedule daily deal report"""
         print(f"[{self.process_name}] Schedule daily deal report - Account {self.current_account_id}...")
         if self.connection_completed and self.current_account_id:
-            reactor.callLater(0, self.send_daily_deal_report)
+            reactor.callLater(0, self.send_daily_deal_list_req)
 
-    def send_daily_deal_report(self):
+    def schedule_weekly_deal_report(self):
+        """Schedule weekly deal report"""
+        print(f"[{self.process_name}] Schedule weekly deal report - Account {self.current_account_id}...")
+        if self.connection_completed and self.current_account_id:
+            reactor.callLater(0, self.send_weekly_deal_list_req)
+
+    def send_hourly_pnl_list_req(self):
+        """Send hourly PnL report"""
+        print(f"[{self.process_name}] Sending hourly PnL report - Account {self.current_account_id}...")
+        # Request current PnL data
+        self.send_proto_oa_get_position_unrealized_pnl_req()
+
+    def send_daily_deal_list_req(self):
         """Send daily deal report for closed positions"""
         print(f"[{self.process_name}] Sending daily deal report - Account {self.current_account_id}...")
 
@@ -296,21 +313,33 @@ class CTraderAsyncClient:
         self.deal_list_data = None
         self.send_proto_oa_deal_list_req(from_timestamp, to_timestamp)
 
-    def send_telegram_message(self, message):
-        """Send message to Telegram"""
-        print(f"[{self.process_name}] Telegram message: {message}")
-        try:
-            url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-            payload = {
-                'chat_id': self.telegram_chat_id,
-                'text': message,
-                'parse_mode': 'HTML'
-            }
-            response = requests.post(url, json=payload, timeout=10)
-            if response.status_code != 200:
-                print(f"[{self.process_name}] Failed to send telegram message: {response.text}")
-        except Exception as e:
-            print(f"[{self.process_name}] Error sending telegram message: {e}")
+    def send_weekly_deal_list_req(self):
+        """Send weekly deal report for closed positions"""
+        print(f"[{self.process_name}] Sending weekly deal report - Account {self.current_account_id}...")
+        # Current time: Friday 21:15 PM
+        now = today = datetime.datetime.now()
+
+        # Last Sunday 21:00 PM (5 days ago)
+        last_sunday = now - datetime.timedelta(days=5)
+        last_sunday = last_sunday.replace(hour=21, minute=0, second=0, microsecond=0)
+
+        # Last Friday 21:00 PM (today, 15 minutes ago)
+        last_friday = now.replace(hour=21, minute=0, second=0, microsecond=0)
+
+        # Convert to microseconds
+        from_timestamp = int(last_sunday.timestamp() * 1_000)
+        to_timestamp = int(last_friday.timestamp() * 1_000)
+
+        print(f"Last Sunday 21:00 PM UTC 0: {from_timestamp}")
+        print(f"Last Friday 21:00 PM UTC 0: {to_timestamp}")
+        # Store week range for the report
+        self.weekly_report_start = last_sunday
+        self.weekly_report_end = last_friday
+
+        # Request deal list data
+        self.deal_list_data = None
+        self.is_weekly_report = True  # Flag to identify this is weekly report
+        self.send_proto_oa_deal_list_req(from_timestamp, to_timestamp)
 
     def run(self):
         """Main run method to start the client"""
@@ -345,6 +374,22 @@ class CTraderAsyncClient:
         reactor.callLater(0, reactor.stop)
 
     #TELEGRAM MESSAGE HANDLER
+    def send_telegram_message(self, message):
+        """Send message to Telegram"""
+        print(f"[{self.process_name}] Telegram message: {message}")
+        try:
+            url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
+            payload = {
+                'chat_id': self.telegram_chat_id,
+                'text': message,
+                'parse_mode': 'HTML'
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code != 200:
+                print(f"[{self.process_name}] Failed to send telegram message: {response.text}")
+        except Exception as e:
+            print(f"[{self.process_name}] Error sending telegram message: {e}")
+
     def send_pnl_telegram_report(self):
         """Send PnL data as formatted table to Telegram"""
         if not self.is_trading_hours():
@@ -483,22 +528,85 @@ class CTraderAsyncClient:
 
         self.send_telegram_message(telegram_msg)
 
-    def get_symbol_name(self, symbol_id):
-        symbol_map = {
-            5: "AUDUSD",
-            12: "NZDUSD",
-            41: "XAUUSD",
-            10026: "BTCUSD"
-        }
-        return symbol_map.get(symbol_id, 'N/A')
+    def send_weekly_deal_telegram_report(self):
+        """Send weekly deal data as formatted table to Telegram"""
+        if not self.deal_list_data:
+            return
 
-    def calculate_volume(self, symbol_id, volume, money_digits):
-        digits = {
-            41: 2,        # XAUUSD
-            10026: 0,     # BTCUSD
-        }
-        # other symbols default to 5 digits
-        return volume / (10 ** (money_digits +  digits.get(symbol_id, 5)))
+        # Filter only closed deals
+        closed_deals_1 = [deal for deal in self.deal_list_data if hasattr(deal, 'closePositionDetail') and hasattr(deal.closePositionDetail, 'balance')]
+        closed_deals = [deal for deal in closed_deals_1 if deal.closePositionDetail.balance > 0]
+
+        if len(closed_deals) == 0:
+            self.send_empty_weekly_deal_telegram_report()
+            return
+
+        # Create table header
+        telegram_msg = f"📊 <b>Weekly Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        telegram_msg += f"<pre>"
+        telegram_msg += f"{'Date':<10} {'Symbol':<7} {'Side':<5} {'Vol':<5} {'Swap':<6} {'Comm':<6} {'Net':<7}\n"
+        telegram_msg += f"{'-'*10} {'-'*7} {'-'*5} {'-'*5} {'-'*6} {'-'*6} {'-'*7}\n"
+
+        total_swap = 0
+        total_commission = 0
+        total_net_profit = 0
+        daily_summaries = {}
+
+        # Group deals by day and calculate totals
+        for deal in closed_deals:
+            close_detail = deal.closePositionDetail
+
+            # Extract deal date
+            deal_date = datetime.datetime.fromtimestamp(deal.executionTimestamp/1000).strftime('%m-%d')
+
+            # Extract symbol
+            symbol = self.get_symbol_name(deal.symbolId)
+
+            # Opening direction
+            direction = 'Sell' if deal.tradeSide == 1 else 'Buy'
+
+            # Volume
+            volume = self.calculate_volume(deal.symbolId, deal.volume, close_detail.moneyDigits)
+
+            # Swap, Commission, Net profit
+            swap = close_detail.swap / (10 ** close_detail.moneyDigits)
+            commission = close_detail.commission / (10 ** close_detail.moneyDigits)
+            gross_profit = close_detail.grossProfit / (10 ** close_detail.moneyDigits)
+            net_profit = gross_profit + swap + commission
+
+            total_swap += swap
+            total_commission += commission
+            total_net_profit += net_profit
+
+            # Add to daily summary
+            if deal_date not in daily_summaries:
+                daily_summaries[deal_date] = {'deals': 0, 'net_profit': 0}
+            daily_summaries[deal_date]['deals'] += 1
+            daily_summaries[deal_date]['net_profit'] += net_profit
+
+            telegram_msg += f"{deal_date:<10} {symbol:<7} {direction:<5} {volume:<5.2f} {swap:<6.2f} {commission:<6.2f} {net_profit:<7.2f}\n"
+
+        # Add totals
+        telegram_msg += f"{'-'*10} {'-'*7} {'-'*5} {'-'*5} {'-'*6} {'-'*6} {'-'*7}\n"
+        telegram_msg += f"{'TOTAL':<10} {'':<7} {'':<5} {'':<5} {total_swap:<6.2f} {total_commission:<6.2f} {total_net_profit:<7.2f}\n"
+        telegram_msg += f"</pre>"
+
+        # Add daily breakdown
+        telegram_msg += f"\n📈 <b>DAILY BREAKDOWN</b>\n"
+        for date, summary in sorted(daily_summaries.items()):
+            telegram_msg += f"📅 {date}: {summary['deals']} deals, Net P&L: {summary['net_profit']:.2f}\n"
+
+        # Add summary
+        telegram_msg += f"\n💰 <b>WEEKLY SUMMARY</b>\n"
+        telegram_msg += f"🔄 Total Swap: {total_swap:.2f}\n"
+        telegram_msg += f"💳 Total Commission: {total_commission:.2f}\n"
+        telegram_msg += f"💵 Total Net Profit: {total_net_profit:.2f}\n"
+        telegram_msg += f"🔢 Total Closed Deals: {len(closed_deals)}\n"
+        telegram_msg += f"📊 Trading Days: {len(daily_summaries)}"
+
+        self.send_telegram_message(telegram_msg)
 
     def send_empty_deal_telegram_report(self, start_of_day):
         """Send empty deal report when no closed deals are found"""
@@ -511,6 +619,30 @@ class CTraderAsyncClient:
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"✅ No closed deals found for this period."
+        telegram_msg += f"</pre>"
+        self.send_telegram_message(telegram_msg)
+
+    def send_empty_deal_telegram_report(self, start_of_day):
+        """Send empty deal report when no closed deals are found"""
+        if not self.is_trading_hours():
+            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
+            return
+
+        telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        telegram_msg += f"<pre>"
+        telegram_msg += f"✅ No closed deals found for this period."
+        telegram_msg += f"</pre>"
+        self.send_telegram_message(telegram_msg)
+
+    def send_empty_weekly_deal_telegram_report(self):
+        """Send empty weekly deal report when no closed deals are found"""
+        telegram_msg = f"📊 <b>Weekly Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        telegram_msg += f"<pre>"
+        telegram_msg += f"✅ No closed deals found for this week."
         telegram_msg += f"</pre>"
         self.send_telegram_message(telegram_msg)
 
@@ -528,36 +660,46 @@ class CTraderAsyncClient:
         self.send_telegram_message(telegram_msg)
 
     def is_trading_hours(self):
-        """
-        Kiểm tra xem hiện tại có phải trong giờ giao dịch AUD không
-        Giờ gd: Thứ 2 04:01:00 - Thứ 6 03:59:45
-        """
         now = datetime.datetime.now()
-        tz = datetime.timezone(datetime.timedelta(hours=7))  # UTC+7
-        now = now.astimezone(tz)
 
         current_weekday = now.weekday()  # 0=Monday, 6=Sunday
         current_time = now.time()
 
-        # giờ mở và đóng cửa
-        market_open = datetime.time(4, 1, 0)    # 04:01:00
-        market_close = datetime.time(3, 59, 45) # 03:59:45
+        # Trading hours
+        market_open = datetime.time(22, 2, 0)    # 22:02:00
+        market_close_friday = datetime.time(20, 57, 0)  # 20:57:00
 
-        # Thứ 2 (0) đến Thứ 6 (4)
-        if current_weekday == 0:  # Thứ 2
-            # Thứ 2 chỉ gd từ 04:01:00 trở đi
+        if current_weekday == 6:  # Sunday
+            # Sunday trading starts at 22:02:00
             return current_time >= market_open
 
-        elif current_weekday in [1, 2, 3]:  # Thứ 3, 4, 5
-            # gd 24h (từ 00:00 đến 23:59 và từ 04:01 của hôm trước)
+        elif current_weekday in [0, 1, 2, 3]:  # Monday to Thursday
+            # Trading ends at 20:59:00, then starts again at 22:02:00
             return True
 
-        elif current_weekday == 4:  # Thứ 6
-            # Thứ 6 đóng cửa lúc 03:59:45
-            return current_time <= market_close
+        elif current_weekday == 4:  # Friday
+            # Friday trading ends at 20:57:00
+            return current_time <= market_close_friday
 
-        else:  # Thứ 7 (5) và CN (6)
+        else:  # Saturday (5)
             return False
+
+    def get_symbol_name(self, symbol_id):
+        symbol_map = {
+            5: "AUDUSD",
+            12: "NZDUSD",
+            41: "XAUUSD",
+            10026: "BTCUSD"
+        }
+        return symbol_map.get(symbol_id, 'N/A')
+
+    def calculate_volume(self, symbol_id, volume, money_digits):
+        digits = {
+            41: 2,        # XAUUSD
+            10026: 0,     # BTCUSD
+        }
+        # other symbols default to 5 digits
+        return volume / (10 ** (money_digits +  digits.get(symbol_id, 5)))
 
 def run_client_process(account_id):
     """Run a single client in its own process"""
