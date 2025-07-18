@@ -347,6 +347,10 @@ class CTraderAsyncClient:
     #TELEGRAM MESSAGE HANDLER
     def send_pnl_telegram_report(self):
         """Send PnL data as formatted table to Telegram"""
+        if not self.is_trading_hours():
+            print(f"[{self.process_name}] Outside trading hours - PnL report not sent for a/c {self.current_account_id}")
+            return
+
         if not self.position_pnl_data:
             return
 
@@ -388,6 +392,10 @@ class CTraderAsyncClient:
 
     def send_deal_telegram_report(self, start_date):
         """Send deal data as formatted table to Telegram"""
+        if not self.is_trading_hours():
+            print(f"[{self.process_name}] Outside trading hours - Deals report not sent for a/c {self.current_account_id}")
+            return
+
         if not self.deal_list_data:
             return
 
@@ -494,6 +502,10 @@ class CTraderAsyncClient:
 
     def send_empty_deal_telegram_report(self, start_of_day):
         """Send empty deal report when no closed deals are found"""
+        if not self.is_trading_hours():
+            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
+            return
+
         telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
@@ -504,12 +516,45 @@ class CTraderAsyncClient:
 
     def send_empty_pnl_telegram_report(self):
         """Send empty PnL report when no active positions are found"""
+        if not self.is_trading_hours():
+            print(f"[{self.process_name}] Outside trading hours - Empty PnL report not sent for a/c {self.current_account_id}")
+            return
+
         telegram_msg = f"📊 <b>Active Position P&L Report - Account No {self.current_account_id}</b>\n"
         telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"🎯 No Active Position"
         telegram_msg += f"</pre>"
         self.send_telegram_message(telegram_msg)
+
+    def is_trading_hours(self):
+        """
+        Kiểm tra xem hiện tại có phải trong giờ giao dịch AUD không
+        Giờ gd: Thứ 2 04:01:00 - Thứ 6 03:59:45
+        """
+        now = datetime.datetime.now()
+        current_weekday = now.weekday()  # 0=Monday, 6=Sunday
+        current_time = now.time()
+
+        # giờ mở và đóng cửa
+        market_open = datetime.time(4, 1, 0)    # 04:01:00
+        market_close = datetime.time(3, 59, 45) # 03:59:45
+
+        # Thứ 2 (0) đến Thứ 6 (4)
+        if current_weekday == 0:  # Thứ 2
+            # Thứ 2 chỉ gd từ 04:01:00 trở đi
+            return current_time >= market_open
+
+        elif current_weekday in [1, 2, 3]:  # Thứ 3, 4, 5
+            # gd 24h (từ 00:00 đến 23:59 và từ 04:01 của hôm trước)
+            return True
+
+        elif current_weekday == 4:  # Thứ 6
+            # Thứ 6 đóng cửa lúc 03:59:45
+            return current_time <= market_close
+
+        else:  # Thứ 7 (5) và CN (6)
+            return False
 
 def run_client_process(account_id):
     """Run a single client in its own process"""
