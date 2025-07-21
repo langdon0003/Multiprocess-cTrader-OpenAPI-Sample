@@ -402,7 +402,7 @@ class CTraderAsyncClient:
         current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print("self.position_pnl_data...", self.position_pnl_data)
         # Create table header
-        telegram_msg = f"📊 <b>Active Position P&L Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Open Position Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"⏰ Time: {current_time}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"{'PID':<10} {'Gross':<9} {'Net':<9}\n"
@@ -429,9 +429,9 @@ class CTraderAsyncClient:
 
         # Add summary
         telegram_msg += f"\n💰 <b>SUMMARY</b>\n"
-        telegram_msg += f"📈 Total Gross P&L: {total_gross_pnl:.2f}\n"
-        telegram_msg += f"📉 Total Net P&L: {total_net_pnl:.2f}\n"
-        telegram_msg += f"🔢 Active Positions: {len(self.position_pnl_data)}"
+        telegram_msg += f"📈 Total Gross: {total_gross_pnl:.2f}\n"
+        telegram_msg += f"📉 Total Net: {total_net_pnl:.2f}\n"
+        telegram_msg += f"🔢 Open Positions: {len(self.position_pnl_data)}"
 
         self.send_telegram_message(telegram_msg)
 
@@ -455,7 +455,7 @@ class CTraderAsyncClient:
             return
 
         # Create table header with Deal ID column
-        telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_date.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -542,7 +542,7 @@ class CTraderAsyncClient:
             return
 
         # Create table header
-        telegram_msg = f"📊 <b>Weekly Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -614,7 +614,7 @@ class CTraderAsyncClient:
             print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -628,7 +628,7 @@ class CTraderAsyncClient:
             print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Daily Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -638,7 +638,7 @@ class CTraderAsyncClient:
 
     def send_empty_weekly_deal_telegram_report(self):
         """Send empty weekly deal report when no closed deals are found"""
-        telegram_msg = f"📊 <b>Weekly Deal Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -647,15 +647,15 @@ class CTraderAsyncClient:
         self.send_telegram_message(telegram_msg)
 
     def send_empty_pnl_telegram_report(self):
-        """Send empty PnL report when no active positions are found"""
+        """Send empty PnL report when no open positions are found"""
         if not self.is_trading_hours():
             print(f"[{self.process_name}] Outside trading hours - Empty PnL report not sent for a/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Active Position P&L Report - Account No {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Open Position Report {self.host_type} a/c {self.current_account_id}</b>\n"
         telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
-        telegram_msg += f"🎯 No Active Position"
+        telegram_msg += f"🎯 No Open Position"
         telegram_msg += f"</pre>"
         self.send_telegram_message(telegram_msg)
 
@@ -734,18 +734,18 @@ def main():
     """Main entry point - start multiple processes"""
     # Load environment variables
     print("#" * 38)
-    print("Loading environment variables...")
-    print("APP_CLIENT_ID :",os.getenv("APP_CLIENT_ID"))
-    print("APP_CLIENT_SECRET :",os.getenv("APP_CLIENT_SECRET"))
-    print("ACCESS_TOKEN :",os.getenv("ACCESS_TOKEN"))
-    print("ACCOUNT_TYPE :",os.getenv("ACCOUNT_TYPE"))
-    print("TELEGRAM_BOT_TOKEN :",os.getenv("TELEGRAM_BOT_TOKEN"))
-    print("TELEGRAM_CHAT_ID :",os.getenv("TELEGRAM_CHAT_ID"))
-    print("SCHEDULE_PNL_REPORT_INTERVAL :",os.getenv("SCHEDULE_PNL_REPORT_INTERVAL"))
-    print("SCHEDULE_PNL_REPORT_TIME :",os.getenv("SCHEDULE_PNL_REPORT_TIME"))
-    print("SCHEDULE_DEALS_REPORT_INTERVAL :",os.getenv("SCHEDULE_DEALS_REPORT_INTERVAL"))
-    print("SCHEDULE_DEALS_REPORT_TIME :",os.getenv("SCHEDULE_DEALS_REPORT_TIME"))
-    print("ACCOUNT_ID_LIST :",os.getenv("ACCOUNT_ID_LIST"))
+    print("# Loading environment variables...")
+    print("# APP_CLIENT_ID                    :",os.getenv("APP_CLIENT_ID"))
+    print("# APP_CLIENT_SECRET                :",os.getenv("APP_CLIENT_SECRET"))
+    print("# ACCESS_TOKEN                     :",os.getenv("ACCESS_TOKEN"))
+    print("# ACCOUNT_TYPE                     :",os.getenv("ACCOUNT_TYPE"))
+    print("# TELEGRAM_BOT_TOKEN               :",os.getenv("TELEGRAM_BOT_TOKEN"))
+    print("# TELEGRAM_CHAT_ID                 :",os.getenv("TELEGRAM_CHAT_ID"))
+    print("# SCHEDULE_PNL_REPORT_INTERVAL     :",os.getenv("SCHEDULE_PNL_REPORT_INTERVAL"))
+    print("# SCHEDULE_PNL_REPORT_TIME         :",os.getenv("SCHEDULE_PNL_REPORT_TIME"))
+    print("# SCHEDULE_DEALS_REPORT_INTERVAL   :",os.getenv("SCHEDULE_DEALS_REPORT_INTERVAL"))
+    print("# SCHEDULE_DEALS_REPORT_TIME       :",os.getenv("SCHEDULE_DEALS_REPORT_TIME"))
+    print("# ACCOUNT_ID_LIST                  :",os.getenv("ACCOUNT_ID_LIST"))
     print("#" * 38)
 
     account_ids = json.loads(os.getenv("ACCOUNT_ID_LIST"))
