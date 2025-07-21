@@ -99,7 +99,7 @@ class CTraderAsyncClient:
 
     def connected(self, client):
         """Callback for client connection"""
-        print(f"[{self.process_name}] Connected successfully - Account: {self.current_account_id}")
+        print(f"[{self.process_name}] Connected successfully {self.host_type} a/c {self.current_account_id}")
         self.connection_attempts = 0
 
         # Send application auth request
@@ -140,7 +140,7 @@ class CTraderAsyncClient:
             return
 
         elif message.payloadType == ProtoOAApplicationAuthRes().payloadType:
-            print(f"[{self.process_name}] API Application authorized - Account: {self.current_account_id}")
+            print(f"[{self.process_name}] API Application authorized {self.host_type} a/c {self.current_account_id}")
             if self.current_account_id is not None:
                 self.send_proto_oa_account_auth_req()
                 return
@@ -205,12 +205,12 @@ class CTraderAsyncClient:
         # Add account ID to telegram message to distinguish between accounts
         print("positionStatus...", positionStatus)
         telegram_msg = f"🎯 <b>{"NEW POSITION OPEN" if positionStatus == 1 else "POSITION CLOSED AUTO" if positionStatus == 2 else "POSITION CLOSED MANUAL" if positionStatus == 3 else 'n/a' }</b>\n"
-        telegram_msg += f"🏦 Account: {self.current_account_id}\n"
+        telegram_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
         telegram_msg += f"📊 PID: {deal.positionId}\n"
         telegram_msg += f"💰 Symbol: {symbol}\n"
         if positionStatus == 1:
             telegram_msg += f"📈 Trade Side: {'BUY' if deal.tradeSide == 1 else 'SELL' if deal.tradeSide == 2 else 'n/a'}\n"
-        telegram_msg += f"💵 Volume: {volume}\n"
+        telegram_msg += f"💵 Volume: {volume} lot\n"
 
         if hasattr(deal, 'executionPrice'):
             telegram_msg += f"💰 Execution Price: {deal.executionPrice}\n"
