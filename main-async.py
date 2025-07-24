@@ -39,7 +39,7 @@ class CTraderAsyncClient:
         self.command_processed = True
         self.shutdown_event = threading.Event()
         self.connection_attempts = 0
-        self.max_connection_attempts = 5
+        self.max_connection_attempts = 10  # Increased to handle longer disconnections
 
         # Load environment variables
         self.app_client_id = os.getenv("APP_CLIENT_ID")
@@ -57,13 +57,13 @@ class CTraderAsyncClient:
 
         # Scheduler task
         self.scheduler_task = None
-        
+
         # Heartbeat task
         self.heartbeat_task = None
         self.last_heartbeat_sent = None
         self.last_heartbeat_received = None
-        self.heartbeat_interval = 30  # Send heartbeat every 30 seconds
-        self.heartbeat_timeout = 120  # Consider connection dead after 120 seconds
+        self.heartbeat_interval = 60  # Send heartbeat every 10 seconds
+        self.heartbeat_timeout = 60  # Consider connection dead after 30 seconds
 
     def initialize(self):
         """Initialize the client and validate host type"""
@@ -103,7 +103,7 @@ class CTraderAsyncClient:
         # Start scheduler
         self.scheduler_task = task.LoopingCall(self.run_scheduler)
         self.scheduler_task.start(60)  # Run every 60 seconds
-        
+
         # Start heartbeat
         self.heartbeat_task = task.LoopingCall(self.send_heartbeat)
         self.heartbeat_task.start(self.heartbeat_interval)
@@ -128,11 +128,16 @@ class CTraderAsyncClient:
         print(f"[{self.process_name}] Disconnected - Account {self.current_account_id}: {reason}")
         self.connection_completed = False
 
+        # Clean up the reason string to remove HTML-like tags
+        reason_str = str(reason)
+        # Remove any angle brackets that might cause issues
+        reason_str = reason_str.replace('<', '').replace('>', '')
+
         # Send disconnection notification to Telegram
         disconnect_msg = f"⚠️ <b>CONNECTION LOST</b>\n"
         disconnect_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
         disconnect_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        disconnect_msg += f"📝 Reason: {reason}\n"
+        disconnect_msg += f"📝 Reason: {reason_str}\n"
         disconnect_msg += f"🔄 Attempting to reconnect..."
         self.send_telegram_message(disconnect_msg)
 
@@ -160,7 +165,7 @@ class CTraderAsyncClient:
                     self.client.stopService()
                 except:
                     pass
-                
+
                 # Reinitialize and start
                 self.initialize()
                 self.client.startService()
@@ -177,9 +182,14 @@ class CTraderAsyncClient:
         """Callback for receiving all messages"""
         # Handle heartbeat
         if message.payloadType == ProtoHeartbeatEvent().payloadType:
+            print(f"[{self.process_name}] Heartbeat received at {self.last_heartbeat_received.strftime('%Y-%m-%d %H:%M:%S')}")
             self.last_heartbeat_received = datetime.datetime.now()
+            # Reset heartbeat error count on successful receive
+            if hasattr(self, '_heartbeat_error_count'):
+                self._heartbeat_error_count = 0
+            # Don't print every heartbeat to reduce log noise
             return
-            
+
         # List of ignored messages
         if message.payloadType in [ProtoOASubscribeSpotsRes().payloadType, ProtoOAAccountLogoutRes().payloadType]:
             return
@@ -195,7 +205,7 @@ class CTraderAsyncClient:
             protoOAAccountAuthRes = Protobuf.extract(message)
             print(f"[{self.process_name}] Account {protoOAAccountAuthRes.ctidTraderAccountId} has been authorized")
             self.connection_completed = True
-            
+
             # Send reconnection success notification if this was a reconnection
             if self.connection_attempts > 0:
                 success_msg = f"✅ <b>RECONNECTION SUCCESSFUL</b>\n"
@@ -758,31 +768,79 @@ class CTraderAsyncClient:
         }
         # other symbols default to 5 digits
         return volume / (10 ** (money_digits +  digits.get(symbol_id, 5)))
-    
-    def send_heartbeat(self):
+
+    async def send_heartbeat(self):
         """Send heartbeat to keep connection alive"""
         if not self.connection_completed or not self.client:
             return
-            
+
+        print(f"[{self.process_name}] Sending heartbeat...")
+
         try:
             # Check if we haven't received heartbeat for too long
-            if self.last_heartbeat_received:
-                time_since_last_heartbeat = (datetime.datetime.now() - self.last_heartbeat_received).total_seconds()
-                if time_since_last_heartbeat > self.heartbeat_timeout:
-                    print(f"[{self.process_name}] Heartbeat timeout detected ({time_since_last_heartbeat:.0f}s). Forcing reconnection...")
-                    # Force disconnect to trigger reconnection
-                    if self.client:
-                        self.client.stopService()
-                    return
-            
+            # if self.last_heartbeat_received:
+            #     time_since_last_heartbeat = (datetime.datetime.now() - self.last_heartbeat_received).total_seconds()
+            #     if time_since_last_heartbeat > self.heartbeat_timeout:
+            #         print(f"[{self.process_name}] Heartbeat timeout detected ({time_since_last_heartbeat:.0f}s). Forcing reconnection...")
+            #         self.connection_completed = False
+            #         # Force disconnect to trigger reconnection
+            #         if self.client:
+            #             try:
+            #                 self.client.stopService()
+            #             except:
+            #                 pass
+            #         return
+
+            # # Don't send heartbeat if we're in the middle of reconnecting
+            # if self.connection_attempts > 0:
+            #     return
+            heartbeat_msg = ProtoHeartbeatEvent()
+            await self.client.send(heartbeat_msg, instant=True)
             # Send heartbeat
-            heartbeat = ProtoHeartbeatEvent()
-            deferred = self.client.send(heartbeat)
-            deferred.addErrback(lambda failure: print(f"[{self.process_name}] Failed to send heartbeat: {failure}"))
+            # heartbeat = ProtoHeartbeatEvent()
+            # self.send(heartbeat, True)
+            # self.client.send(heartbeat, True)
+
+            print(f"[{self.process_name}] Sending heartbeat... done")
+            # def handle_heartbeat_success(result):
+            #     # Don't print every heartbeat success to reduce log noise
+            #     print(f"[{self.process_name}] Heartbeat sent successfully at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            #     return result
+
+            # def handle_heartbeat_error(failure):
+            #     error_type = failure.type.__name__ if hasattr(failure, 'type') else 'Unknown'
+            #     print(f"[{self.process_name}] Heartbeat failed ({error_type}). Connection may be unstable.")
+
+            #     # Don't immediately force reconnection on first error
+            #     # Give it one more chance
+            #     if hasattr(self, '_heartbeat_error_count'):
+            #         self._heartbeat_error_count += 1
+            #     else:
+            #         self._heartbeat_error_count = 1
+
+            #     if self._heartbeat_error_count >= 2:
+            #         print(f"[{self.process_name}] Multiple heartbeat failures. Forcing reconnection...")
+            #         self.connection_completed = False
+            #         self._heartbeat_error_count = 0
+            #         if self.client:
+            #             try:
+            #                 self.client.stopService()
+            #             except:
+            #                 pass
+
+            # deferred.addCallback(handle_heartbeat_success)
+            # deferred.addErrback(handle_heartbeat_error)
             self.last_heartbeat_sent = datetime.datetime.now()
-            
+
         except Exception as e:
-            print(f"[{self.process_name}] Error sending heartbeat: {e}")
+            print(f"[{self.process_name}] Error in heartbeat: {e}")
+            # Force reconnection on any error
+            # self.connection_completed = False
+            # if self.client:
+            #     try:
+            #         self.client.stopService()
+            #     except:
+            #         pass
 
 def run_client_process(account_id):
     """Run a single client in its own process"""
