@@ -57,6 +57,13 @@ class CTraderAsyncClient:
 
         # Scheduler task
         self.scheduler_task = None
+        
+        # Heartbeat task
+        self.heartbeat_task = None
+        self.last_heartbeat_sent = None
+        self.last_heartbeat_received = None
+        self.heartbeat_interval = 30  # Send heartbeat every 30 seconds
+        self.heartbeat_timeout = 120  # Consider connection dead after 120 seconds
 
     def initialize(self):
         """Initialize the client and validate host type"""
@@ -96,11 +103,16 @@ class CTraderAsyncClient:
         # Start scheduler
         self.scheduler_task = task.LoopingCall(self.run_scheduler)
         self.scheduler_task.start(60)  # Run every 60 seconds
+        
+        # Start heartbeat
+        self.heartbeat_task = task.LoopingCall(self.send_heartbeat)
+        self.heartbeat_task.start(self.heartbeat_interval)
 
     def connected(self, client):
         """Callback for client connection"""
         print(f"[{self.process_name}] Connected successfully {self.host_type} a/c {self.current_account_id}")
         self.connection_attempts = 0
+        self.last_heartbeat_received = datetime.datetime.now()
 
         # Send application auth request
         request = ProtoOAApplicationAuthReq()
@@ -116,27 +128,60 @@ class CTraderAsyncClient:
         print(f"[{self.process_name}] Disconnected - Account {self.current_account_id}: {reason}")
         self.connection_completed = False
 
-        # Attempt to reconnect
+        # Send disconnection notification to Telegram
+        disconnect_msg = f"⚠️ <b>CONNECTION LOST</b>\n"
+        disconnect_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
+        disconnect_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        disconnect_msg += f"📝 Reason: {reason}\n"
+        disconnect_msg += f"🔄 Attempting to reconnect..."
+        self.send_telegram_message(disconnect_msg)
+
+        # Attempt to reconnect with exponential backoff
         if self.connection_attempts < self.max_connection_attempts:
             self.connection_attempts += 1
-            print(f"[{self.process_name}] Attempting to reconnect ({self.connection_attempts}/{self.max_connection_attempts})...")
-            reactor.callLater(5, self.reconnect)
+            reconnect_delay = min(5 * (2 ** (self.connection_attempts - 1)), 60)  # Max 60 seconds
+            print(f"[{self.process_name}] Attempting to reconnect ({self.connection_attempts}/{self.max_connection_attempts}) in {reconnect_delay} seconds...")
+            reactor.callLater(reconnect_delay, self.reconnect)
         else:
             print(f"[{self.process_name}] Max connection attempts reached. Shutting down.")
+            failure_msg = f"❌ <b>RECONNECTION FAILED</b>\n"
+            failure_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
+            failure_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            failure_msg += f"⚠️ Max connection attempts reached. Client shutting down."
+            self.send_telegram_message(failure_msg)
             self.shutdown_event.set()
 
     def reconnect(self):
         """Attempt to reconnect"""
         try:
             if self.client:
+                # Stop the old service first
+                try:
+                    self.client.stopService()
+                except:
+                    pass
+                
+                # Reinitialize and start
+                self.initialize()
                 self.client.startService()
         except Exception as e:
             print(f"[{self.process_name}] Reconnection failed: {e}")
+            # Try again if we haven't reached max attempts
+            if self.connection_attempts < self.max_connection_attempts:
+                self.connection_attempts += 1
+                reconnect_delay = min(5 * (2 ** (self.connection_attempts - 1)), 60)
+                print(f"[{self.process_name}] Retrying reconnection ({self.connection_attempts}/{self.max_connection_attempts}) in {reconnect_delay} seconds...")
+                reactor.callLater(reconnect_delay, self.reconnect)
 
     def on_message_received(self, client, message):
         """Callback for receiving all messages"""
+        # Handle heartbeat
+        if message.payloadType == ProtoHeartbeatEvent().payloadType:
+            self.last_heartbeat_received = datetime.datetime.now()
+            return
+            
         # List of ignored messages
-        if message.payloadType in [ProtoOASubscribeSpotsRes().payloadType, ProtoOAAccountLogoutRes().payloadType, ProtoHeartbeatEvent().payloadType]:
+        if message.payloadType in [ProtoOASubscribeSpotsRes().payloadType, ProtoOAAccountLogoutRes().payloadType]:
             return
 
         elif message.payloadType == ProtoOAApplicationAuthRes().payloadType:
@@ -150,6 +195,15 @@ class CTraderAsyncClient:
             protoOAAccountAuthRes = Protobuf.extract(message)
             print(f"[{self.process_name}] Account {protoOAAccountAuthRes.ctidTraderAccountId} has been authorized")
             self.connection_completed = True
+            
+            # Send reconnection success notification if this was a reconnection
+            if self.connection_attempts > 0:
+                success_msg = f"✅ <b>RECONNECTION SUCCESSFUL</b>\n"
+                success_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
+                success_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                success_msg += f"🔄 Connection restored after {self.connection_attempts} attempts."
+                self.send_telegram_message(success_msg)
+                self.connection_attempts = 0
 
         elif message.payloadType == ProtoOAGetPositionUnrealizedPnLRes().payloadType:
             pnl_response = Protobuf.extract(message)
@@ -360,6 +414,8 @@ class CTraderAsyncClient:
             # Cleanup
             if self.scheduler_task and self.scheduler_task.running:
                 self.scheduler_task.stop()
+            if self.heartbeat_task and self.heartbeat_task.running:
+                self.heartbeat_task.stop()
             if self.client:
                 self.client.stopService()
 
@@ -369,6 +425,8 @@ class CTraderAsyncClient:
         self.shutdown_event.set()
         if self.scheduler_task and self.scheduler_task.running:
             self.scheduler_task.stop()
+        if self.heartbeat_task and self.heartbeat_task.running:
+            self.heartbeat_task.stop()
         if self.client:
             self.client.stopService()
         reactor.callLater(0, reactor.stop)
@@ -700,6 +758,31 @@ class CTraderAsyncClient:
         }
         # other symbols default to 5 digits
         return volume / (10 ** (money_digits +  digits.get(symbol_id, 5)))
+    
+    def send_heartbeat(self):
+        """Send heartbeat to keep connection alive"""
+        if not self.connection_completed or not self.client:
+            return
+            
+        try:
+            # Check if we haven't received heartbeat for too long
+            if self.last_heartbeat_received:
+                time_since_last_heartbeat = (datetime.datetime.now() - self.last_heartbeat_received).total_seconds()
+                if time_since_last_heartbeat > self.heartbeat_timeout:
+                    print(f"[{self.process_name}] Heartbeat timeout detected ({time_since_last_heartbeat:.0f}s). Forcing reconnection...")
+                    # Force disconnect to trigger reconnection
+                    if self.client:
+                        self.client.stopService()
+                    return
+            
+            # Send heartbeat
+            heartbeat = ProtoHeartbeatEvent()
+            deferred = self.client.send(heartbeat)
+            deferred.addErrback(lambda failure: print(f"[{self.process_name}] Failed to send heartbeat: {failure}"))
+            self.last_heartbeat_sent = datetime.datetime.now()
+            
+        except Exception as e:
+            print(f"[{self.process_name}] Error sending heartbeat: {e}")
 
 def run_client_process(account_id):
     """Run a single client in its own process"""
