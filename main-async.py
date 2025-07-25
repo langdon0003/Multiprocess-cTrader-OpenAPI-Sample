@@ -102,7 +102,7 @@ class CTraderAsyncClient:
 
     def connected(self, client):
         """Callback for client connection"""
-        print(f"[{self.process_name}] Connected successfully {self.host_type} a/c {self.current_account_id}")
+        print(f"[{self.process_name}] Connected successfully {self.host_type.capitalize()} A/c {self.current_account_id}")
         self.connection_attempts = 0
 
         # Send application auth request
@@ -126,7 +126,7 @@ class CTraderAsyncClient:
 
         # Send disconnection notification to Telegram
         disconnect_msg = f"⚠️ <b>CONNECTION LOST</b>\n"
-        disconnect_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
+        disconnect_msg += f"🏦 {self.host_type.capitalize()} A/c {self.current_account_id}\n"
         disconnect_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         disconnect_msg += f"📝 Reason: {reason_str}\n"
         self.send_telegram_message(disconnect_msg)
@@ -143,7 +143,7 @@ class CTraderAsyncClient:
             return
 
         elif message.payloadType == ProtoOAApplicationAuthRes().payloadType:
-            print(f"[{self.process_name}] API Application authorized {self.host_type} a/c {self.current_account_id}")
+            print(f"[{self.process_name}] API authorized {self.host_type.capitalize()} A/c {self.current_account_id}")
             if self.current_account_id is not None:
                 self.send_proto_oa_account_auth_req()
                 return
@@ -157,7 +157,7 @@ class CTraderAsyncClient:
             # Send reconnection success notification if this was a reconnection
             if self.connection_attempts > 0:
                 success_msg = f"✅ <b>RECONNECTION SUCCESSFUL</b>\n"
-                success_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
+                success_msg += f"🏦 {self.host_type.capitalize()} A/c {self.current_account_id}\n"
                 success_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 success_msg += f"🔄 Connection restored after {self.connection_attempts} attempts."
                 self.send_telegram_message(success_msg)
@@ -217,8 +217,8 @@ class CTraderAsyncClient:
         # Add account ID to telegram message to distinguish between accounts
         print("positionStatus...", positionStatus)
         telegram_msg = f"🎯 <b>{"NEW POSITION OPEN" if positionStatus == 1 else "POSITION CLOSED AUTO" if positionStatus == 2 else "POSITION CLOSED MANUAL" if positionStatus == 3 else 'n/a' }</b>\n"
-        telegram_msg += f"🏦 {self.host_type.capitalize()} a/c: {self.current_account_id}\n"
-        telegram_msg += f"📊 PID: {deal.positionId}\n"
+        telegram_msg += f"🏦 {self.host_type.capitalize()} A/c {self.current_account_id}\n"
+        telegram_msg += f"📊 PID: ${deal.positionId}\n"
         telegram_msg += f"💰 Symbol: {symbol}\n"
         if positionStatus == 1:
             telegram_msg += f"📈 Trade Side: {'BUY' if deal.tradeSide == 1 else 'SELL' if deal.tradeSide == 2 else 'n/a'}\n"
@@ -409,7 +409,7 @@ class CTraderAsyncClient:
     def send_pnl_telegram_report(self):
         """Send PnL data as formatted table to Telegram"""
         if not self.is_trading_hours():
-            print(f"[{self.process_name}] Outside trading hours - PnL report not sent for a/c {self.current_account_id}")
+            print(f"[{self.process_name}] Outside trading hours - PnL report not sent for A/c {self.current_account_id}")
             return
 
         if not self.position_pnl_data:
@@ -418,7 +418,7 @@ class CTraderAsyncClient:
         current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Create table header
-        telegram_msg = f"📊 <b>Open Position Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Open Position Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"⏰ Time: {current_time}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"{'PID':<10} {'Gross':<9} {'Net':<9}\n"
@@ -454,7 +454,7 @@ class CTraderAsyncClient:
     def send_deal_telegram_report(self, start_date):
         """Send deal data as formatted table to Telegram"""
         if not self.is_trading_hours():
-            print(f"[{self.process_name}] Outside trading hours - Deals report not sent for a/c {self.current_account_id}")
+            print(f"[{self.process_name}] Outside trading hours - Deals report not sent for A/c {self.current_account_id}")
             return
 
         if not self.deal_list_data:
@@ -470,7 +470,7 @@ class CTraderAsyncClient:
             return
 
         # Create table header with Deal ID column
-        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_date.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -562,7 +562,7 @@ class CTraderAsyncClient:
             return
 
         # Create table header
-        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -631,10 +631,10 @@ class CTraderAsyncClient:
     def send_empty_deal_telegram_report(self, start_of_day):
         """Send empty deal report when no closed deals are found"""
         if not self.is_trading_hours():
-            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
+            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for A/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -645,10 +645,10 @@ class CTraderAsyncClient:
     def send_empty_deal_telegram_report(self, start_of_day):
         """Send empty deal report when no closed deals are found"""
         if not self.is_trading_hours():
-            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for a/c {self.current_account_id}")
+            print(f"[{self.process_name}] Outside trading hours - Empty Deals report not sent for A/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Daily Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Date: {start_of_day.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -658,7 +658,7 @@ class CTraderAsyncClient:
 
     def send_empty_weekly_deal_telegram_report(self):
         """Send empty weekly deal report when no closed deals are found"""
-        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
@@ -669,10 +669,10 @@ class CTraderAsyncClient:
     def send_empty_pnl_telegram_report(self):
         """Send empty PnL report when no open positions are found"""
         if not self.is_trading_hours():
-            print(f"[{self.process_name}] Outside trading hours - Empty PnL report not sent for a/c {self.current_account_id}")
+            print(f"[{self.process_name}] Outside trading hours - Empty PnL report not sent for A/c {self.current_account_id}")
             return
 
-        telegram_msg = f"📊 <b>Open Position Report {self.host_type} a/c {self.current_account_id}</b>\n"
+        telegram_msg = f"📊 <b>Open Position Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
         telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"🎯 No Open Position"
