@@ -1,34 +1,29 @@
 #!/usr/bin/env python
 
-import datetime
 import os
-import inspect
+import time
+import json
+import datetime
 import requests
 import schedule
-import time
 import threading
 import multiprocessing
-import json
 
 from dotenv import load_dotenv
-from multiprocessing import Process
 from twisted.internet import reactor, task
-
-from ctrader_open_api.endpoints import EndPoints
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAExecutionType
 from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEvent
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
-    ProtoOADealListReq, ProtoOADealListRes, ProtoOAApplicationAuthReq,
     ProtoOASubscribeSpotsRes, ProtoOAApplicationAuthRes,
-    ProtoOAGetPositionUnrealizedPnLReq, ProtoOAGetPositionUnrealizedPnLRes,
+    ProtoOADealListReq, ProtoOADealListRes, ProtoOAApplicationAuthReq,
     ProtoOAExecutionEvent, ProtoOAAccountLogoutRes, ProtoOAAccountAuthRes,
+    ProtoOAGetPositionUnrealizedPnLReq, ProtoOAGetPositionUnrealizedPnLRes,
     ProtoOAGetAccountListByAccessTokenReq, ProtoOAAccountLogoutReq, ProtoOAAccountAuthReq
 )
 
 # For logging use
 load_dotenv()
-filename = os.path.basename(inspect.getfile(inspect.currentframe()))
 
 class CTraderAsyncClient:
     def __init__(self, ctid_trader_account_id=None, process_name=None):
@@ -329,7 +324,7 @@ class CTraderAsyncClient:
         """Send weekly deal report for closed positions"""
         print(f"[{self.process_name}] Sending weekly deal report - Account {self.current_account_id}...")
         # Current time: Friday 21:15 PM
-        now = today = datetime.datetime.now()
+        now = datetime.datetime.now()
 
         # Last Sunday 21:00 PM (5 days ago)
         last_sunday = now - datetime.timedelta(days=5)
@@ -776,7 +771,7 @@ def main():
 
         # Create and start processes
         for account_id in account_ids:
-            process = Process(
+            process = multiprocessing.Process(
                 target=run_client_process,
                 args=(account_id,),
                 name=f"CTrader-{account_id}"
