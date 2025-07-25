@@ -393,8 +393,8 @@ class CTraderAsyncClient:
                 'text': message,
                 'parse_mode': 'HTML'
             }
-            # response = requests.post(url, json=payload, timeout=1)
-            response = self.session.post(url, json=payload, timeout=1)
+            # response = requests.post(url, json=payload, timeout=10)
+            response = self.session.post(url, json=payload, timeout=10)
             if response.status_code != 200:
                 print(f"[{self.process_name}] Failed to send telegram message: {response.text}")
             print(f"[{self.process_name}] Telegram message sent in {(datetime.datetime.now() - start_telegram).total_seconds():.3f} seconds")
