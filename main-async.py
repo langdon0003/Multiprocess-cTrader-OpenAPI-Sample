@@ -211,21 +211,21 @@ class CTraderAsyncClient:
 
         # Add account ID to telegram message to distinguish between accounts
         print("positionStatus...", positionStatus)
-        telegram_msg = f"🎯 <b>{"NEW POSITION OPEN" if positionStatus == 1 else "POSITION CLOSED AUTO" if positionStatus == 2 else "POSITION CLOSED MANUAL" if positionStatus == 3 else 'n/a' }</b>\n"
+        telegram_msg = f"<b>{"🚀 NEW POSITION OPEN" if positionStatus == 1 else "✅ POSITION CLOSED AUTO" if positionStatus == 2 else "✅ POSITION CLOSED MANUAL" if positionStatus == 3 else 'n/a' }</b>\n"
         telegram_msg += f"🏦 {self.host_type.capitalize()} A/c {self.current_account_id}\n"
-        telegram_msg += f"📊 PID: ${deal.positionId}\n"
-        telegram_msg += f"💰 Symbol: {symbol}\n"
+        telegram_msg += f"🆔 PID: {deal.positionId}\n"
+        telegram_msg += f"📉 Symbol: {symbol}\n"
         if positionStatus == 1:
-            telegram_msg += f"📈 Trade Side: {'BUY' if deal.tradeSide == 1 else 'SELL' if deal.tradeSide == 2 else 'n/a'}\n"
-        telegram_msg += f"💵 Volume: {volume} lot\n"
+            telegram_msg += f"📈 Trade Side: {'🟢 BUY' if deal.tradeSide == 1 else '🔴 SELL' if deal.tradeSide == 2 else 'n/a'}\n"
+        telegram_msg += f"📦 Volume: {volume} lot\n"
 
         if hasattr(deal, 'executionPrice'):
-            telegram_msg += f"💰 Execution Price: {deal.executionPrice}\n"
+            telegram_msg += f"🎯 Execution Price: {deal.executionPrice}\n"
         if positionStatus == 2 or positionStatus == 3:
-            telegram_msg += f"💰 Entry Price: {deal.closePositionDetail.entryPrice}\n"
+            telegram_msg += f"🚪 Entry Price: {deal.closePositionDetail.entryPrice}\n"
             telegram_msg += f"💰 GrossProfit: {deal.closePositionDetail.grossProfit/ (10 ** deal.moneyDigits)}\n"
-            telegram_msg += f"💰 Swap: {deal.closePositionDetail.swap/ (10 ** deal.moneyDigits)}\n"
-            telegram_msg += f"💰 Commission: {deal.closePositionDetail.commission/ (10 ** deal.moneyDigits)}\n"
+            telegram_msg += f"🔄 Swap: {deal.closePositionDetail.swap/ (10 ** deal.moneyDigits)}\n"
+            telegram_msg += f"💸 Commission: {deal.closePositionDetail.commission/ (10 ** deal.moneyDigits)}\n"
             telegram_msg += f"💰 Balance: {deal.closePositionDetail.balance/ (10 ** deal.moneyDigits)}\n"
 
         telegram_msg += f"⏰ Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -536,7 +536,7 @@ class CTraderAsyncClient:
         # Add summary
         telegram_msg += f"\n💰 <b>SUMMARY</b>\n"
         telegram_msg += f"🔄 Total Swap: {total_swap:.2f}\n"
-        telegram_msg += f"💳 Total Commission: {total_commission:.2f}\n"
+        telegram_msg += f"💸 Total Commission: {total_commission:.2f}\n"
         telegram_msg += f"💵 Total Net Profit: {total_net_profit:.2f}\n"
         telegram_msg += f"💰 Final Balance: {current_balance:.2f}\n"
         telegram_msg += f"🔢 Closed Deals: {len(closed_deals)}"
@@ -616,10 +616,10 @@ class CTraderAsyncClient:
         # Add summary
         telegram_msg += f"\n💰 <b>WEEKLY SUMMARY</b>\n"
         telegram_msg += f"🔄 Total Swap: {total_swap:.2f}\n"
-        telegram_msg += f"💳 Total Commission: {total_commission:.2f}\n"
+        telegram_msg += f"💸 Total Commission: {total_commission:.2f}\n"
         telegram_msg += f"💵 Total Net Profit: {total_net_profit:.2f}\n"
         telegram_msg += f"🔢 Total Closed Deals: {len(closed_deals)}\n"
-        telegram_msg += f"📊 Trading Days: {len(daily_summaries)}"
+        telegram_msg += f"🔢 Trading Days: {len(daily_summaries)}"
 
         self.send_telegram_message(telegram_msg)
 
