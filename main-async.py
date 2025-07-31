@@ -124,7 +124,8 @@ class CTraderAsyncClient:
         disconnect_msg += f"🏦 {self.host_type.capitalize()} A/c {self.current_account_id}\n"
         disconnect_msg += f"📅 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         disconnect_msg += f"📝 Reason: {reason_str}\n"
-        self.send_telegram_message(disconnect_msg)
+        print(f"[{self.process_name}] Sending disconnection message to Telegram: {disconnect_msg}")
+        # self.send_telegram_message(disconnect_msg)
 
     def on_message_received(self, client, message):
         """Callback for receiving all messages"""
