@@ -88,7 +88,7 @@ class CTraderAsyncClient:
         schedule.every(schedule_deals_report_interval).days.at(schedule_deals_report_time).do(self.schedule_daily_deal_report)
 
         # Default 04:00 in Saturday UTC +7 # 21:00 in Friday UTC 0
-        schedule_weekly_report_time = os.getenv("SCHEDULE_WEEKLY_REPORT_TIME", "21:00")
+        schedule_weekly_report_time = os.getenv("SCHEDULE_WEEKLY_REPORT_TIME", "21:15")
         schedule.every().friday.at(schedule_weekly_report_time).do(self.schedule_weekly_deal_report)
 
         # Start scheduler
@@ -559,7 +559,7 @@ class CTraderAsyncClient:
 
         # Create table header
         telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
-        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d %H:%M:%S')} to {self.weekly_report_end.strftime('%Y-%m-%d %H:%M:%S')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"{'Date':<10} {'Symbol':<7} {'Side':<5} {'Vol':<5} {'Swap':<6} {'Comm':<6} {'Net':<7}\n"
@@ -655,7 +655,7 @@ class CTraderAsyncClient:
     def send_empty_weekly_deal_telegram_report(self):
         """Send empty weekly deal report when no closed deals are found"""
         telegram_msg = f"📊 <b>Weekly Deal Report {self.host_type.capitalize()} A/c {self.current_account_id}</b>\n"
-        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d')} to {self.weekly_report_end.strftime('%Y-%m-%d')}\n"
+        telegram_msg += f"📅 Week: {self.weekly_report_start.strftime('%Y-%m-%d %H:%M:%S')} to {self.weekly_report_end.strftime('%Y-%m-%d %H:%M:%S')}\n"
         telegram_msg += f"⏰ Report Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         telegram_msg += f"<pre>"
         telegram_msg += f"✅ No closed deals found for this week."
